@@ -98,14 +98,14 @@ async def _get_korean_stock_data(ticker: str, timeframe: str = 'daily') -> pd.Da
                         start_date.strftime("%Y%m%d"),
                         try_date.strftime("%Y%m%d"),
                         ticker,
-                        interval='w'
+                        freq='w'
                     )
                 elif interval == 'month':
                     df = stock.get_market_ohlcv_by_date(
                         start_date.strftime("%Y%m%d"),
                         try_date.strftime("%Y%m%d"),
                         ticker,
-                        interval='m'
+                        freq='m'
                     )
                 else:  # daily
                     df = stock.get_market_ohlcv_by_date(

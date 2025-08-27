@@ -5,14 +5,15 @@ import { StockChart } from './StockChart';
 
 interface AnalysisResultProps {
   analysis: StockAnalysis | null;
+  onTimeframeChange?: (timeframe: 'daily' | 'weekly' | 'hourly') => void;
 }
 
-export const AnalysisResult: React.FC<AnalysisResultProps> = ({ analysis }) => {
+export const AnalysisResult: React.FC<AnalysisResultProps> = ({ analysis, onTimeframeChange }) => {
   if (!analysis) return null;
 
   return (
     <Box>
-      {analysis.chart_data && <StockChart chartData={analysis.chart_data} />}
+      {analysis.chart_data && <StockChart chartData={analysis.chart_data} onTimeframeChange={onTimeframeChange || (() => {})} market={analysis.market} />}
       <Paper sx={{ p: 3, mt: 3 }}>
         <Grid container spacing={3}>
           <Grid item xs={12}>
