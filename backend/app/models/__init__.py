@@ -16,6 +16,8 @@ class ChartData(BaseModel):
     dates: List[str]
     prices: List[float]
     volumes: List[int]
+    rsi: List[float]
+    timeframe: str
 
 class StockAnalysis(BaseModel):
     ticker: str

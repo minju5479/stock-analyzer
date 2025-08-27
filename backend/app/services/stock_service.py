@@ -2,19 +2,20 @@ import yfinance as yf
 from pykrx import stock
 import pandas as pd
 import numpy as np
+from typing import List
 from ..models import StockAnalysis, TechnicalIndicators, ChartData
 from datetime import datetime, timedelta
 import logging
 
 logger = logging.getLogger(__name__)
 
-async def analyze_stock(ticker: str, market: str) -> StockAnalysis:
+async def analyze_stock(ticker: str, market: str, timeframe: str = 'daily') -> StockAnalysis:
     try:
         # 시장에 따라 적절한 데이터 소스 선택
         if market.lower() == "kr":
-            data = await _get_korean_stock_data(ticker)
+            data = await _get_korean_stock_data(ticker, timeframe)
         else:
-            data = await _get_us_stock_data(ticker)
+            data = await _get_us_stock_data(ticker, timeframe)
         
         if data.empty:
             raise ValueError(f"No data found for ticker {ticker}")
@@ -28,6 +29,7 @@ async def analyze_stock(ticker: str, market: str) -> StockAnalysis:
         change_percent = ((current_price - prev_price) / prev_price) * 100
 
         indicators = await _calculate_technical_indicators(data)
+        rsi_values = await _calculate_rsi_series(data)
         
         # 차트 데이터 준비
         dates = data.index.strftime('%Y-%m-%d').tolist()
@@ -37,7 +39,9 @@ async def analyze_stock(ticker: str, market: str) -> StockAnalysis:
         chart_data = ChartData(
             dates=dates,
             prices=prices,
-            volumes=volumes
+            volumes=volumes,
+            rsi=rsi_values,
+            timeframe=timeframe
         )
         
         analysis = StockAnalysis(
@@ -57,12 +61,104 @@ async def analyze_stock(ticker: str, market: str) -> StockAnalysis:
         logger.error(f"Error analyzing stock {ticker}: {str(e)}")
         raise
 
-async def get_technical_indicators(ticker: str, market: str) -> TechnicalIndicators:
+async def _get_korean_stock_data(ticker: str, timeframe: str = 'daily') -> pd.DataFrame:
+    try:
+        end_date = datetime.now()
+        ticker = ticker.zfill(6)
+        
+        # timeframe에 따라 시작 날짜와 간격 조정
+        timeframe_settings = {
+            '1m': (1, 'min'),
+            '3m': (1, 'min'),
+            '5m': (1, 'min'),
+            '10m': (1, 'min'),
+            '15m': (1, 'min'),
+            '30m': (1, 'min'),
+            '60m': (1, 'min'),
+            '120m': (1, 'min'),
+            '240m': (1, 'min'),
+            'daily': (365, 'day'),
+            'weekly': (365 * 2, 'week'),
+            'monthly': (365 * 5, 'month')
+        }
+        
+        days, interval = timeframe_settings.get(timeframe, (365, 'day'))
+        start_date = end_date - timedelta(days=days)
+        
+        # 분 단위 데이터 요청인 경우
+        if interval == 'min':
+            # Note: pykrx는 분 단위 데이터를 제공하지 않으므로 다른 데이터 소스 사용 필요
+            raise NotImplementedError("Korean stock minute data not yet implemented")
+        
+        for i in range(5):
+            try_date = end_date - timedelta(days=i)
+            try:
+                if interval == 'week':
+                    df = stock.get_market_ohlcv_by_date(
+                        start_date.strftime("%Y%m%d"),
+                        try_date.strftime("%Y%m%d"),
+                        ticker,
+                        interval='w'
+                    )
+                elif interval == 'month':
+                    df = stock.get_market_ohlcv_by_date(
+                        start_date.strftime("%Y%m%d"),
+                        try_date.strftime("%Y%m%d"),
+                        ticker,
+                        interval='m'
+                    )
+                else:  # daily
+                    df = stock.get_market_ohlcv_by_date(
+                        start_date.strftime("%Y%m%d"),
+                        try_date.strftime("%Y%m%d"),
+                        ticker
+                    )
+                if not df.empty:
+                    return df
+            except Exception as e:
+                logger.warning(f"Failed to fetch data for date {try_date.strftime('%Y%m%d')}: {str(e)}")
+        
+        raise ValueError(f"No data found for Korean stock {ticker} in the last 5 days")
+    except Exception as e:
+        logger.error(f"Error fetching Korean stock data: {str(e)}")
+        raise ValueError(f"Failed to fetch data for Korean stock {ticker}")
+
+async def _get_us_stock_data(ticker: str, timeframe: str = 'daily') -> pd.DataFrame:
+    try:
+        stock_data = yf.Ticker(ticker)
+        
+        # timeframe에 따라 적절한 기간과 간격 설정
+        period_map = {
+            '1m': ("1d", "1m"),
+            '3m': ("1d", "3m"),
+            '5m': ("1d", "5m"),
+            '10m': ("5d", "10m"),
+            '15m': ("5d", "15m"),
+            '30m': ("5d", "30m"),
+            '60m': ("7d", "60m"),
+            '120m': ("7d", "90m"),
+            '240m': ("7d", "90m"),
+            'daily': ("1y", "1d"),
+            'weekly': ("2y", "1wk"),
+            'monthly': ("5y", "1mo"),
+        }
+        
+        period, interval = period_map.get(timeframe, ("1y", "1d"))
+        df = stock_data.history(period=period, interval=interval)
+            
+        if df.empty:
+            raise ValueError(f"No data found for US stock {ticker}")
+        return df
+    except Exception as e:
+        logger.error(f"Error fetching US stock data: {str(e)}")
+        raise ValueError(f"Failed to fetch data for US stock {ticker}")
+
+async def get_technical_indicators(ticker: str, market: str, timeframe: str = 'daily') -> TechnicalIndicators:
     try:
         if market.lower() == "kr":
-            data = await _get_korean_stock_data(ticker)
+            data = await _get_korean_stock_data(ticker, timeframe)
         else:
-            data = await _get_us_stock_data(ticker)
+            data = await _get_us_stock_data(ticker, timeframe)
         
         if data.empty:
             raise ValueError(f"No data found for ticker {ticker}")
@@ -72,44 +168,70 @@ async def get_technical_indicators(ticker: str, market: str) -> TechnicalIndicat
         logger.error(f"Error getting technical indicators for {ticker}: {str(e)}")
         raise
 
-async def _get_korean_stock_data(ticker: str) -> pd.DataFrame:
+async def _calculate_rsi_series(data: pd.DataFrame, period: int = 14) -> List[float]:
     try:
-        end_date = datetime.now()
-        start_date = end_date - timedelta(days=365)
+        close_prices = data['Close'].values if 'Close' in data.columns else data['종가'].values
+        delta = pd.Series(close_prices).diff()
+        gains = delta.where(delta > 0, 0)
+        losses = -delta.where(delta < 0, 0)
         
-        # 종목 코드가 6자리가 아닌 경우 6자리로 맞추기
-        ticker = ticker.zfill(6)
+        avg_gains = gains.rolling(window=period).mean()
+        avg_losses = losses.rolling(window=period).mean()
         
-        # 최대 5일 전까지 데이터 확인 (주말/공휴일 고려)
-        for i in range(5):
-            try_date = end_date - timedelta(days=i)
-            try:
-                df = stock.get_market_ohlcv_by_date(
-                    start_date.strftime("%Y%m%d"),
-                    try_date.strftime("%Y%m%d"),
-                    ticker
-                )
-                if not df.empty:
-                    return df
-            except Exception as e:
-                logger.warning(f"Failed to fetch data for date {try_date.strftime('%Y%m%d')}: {str(e)}")
+        rs = avg_gains / avg_losses
+        rsi = 100 - (100 / (1 + rs))
         
-        # 5일 동안 시도했는데도 데이터가 없는 경우
-        raise ValueError(f"No data found for Korean stock {ticker} in the last 5 days")
+        return [float(x) if not pd.isna(x) else 50.0 for x in rsi]
     except Exception as e:
-        logger.error(f"Error fetching Korean stock data: {str(e)}")
-        raise ValueError(f"Failed to fetch data for Korean stock {ticker}")
+        logger.error(f"Error calculating RSI series: {str(e)}")
+        raise
 
-async def _get_us_stock_data(ticker: str) -> pd.DataFrame:
+async def _calculate_technical_indicators(data: pd.DataFrame) -> TechnicalIndicators:
     try:
-        stock_data = yf.Ticker(ticker)
-        df = stock_data.history(period="1y")
-        if df.empty:
-            raise ValueError(f"No data found for US stock {ticker}")
-        return df
+        close_prices = data['Close'].values if 'Close' in data.columns else data['종가'].values
+        
+        # Calculate SMA
+        sma_50 = pd.Series(close_prices).rolling(window=50).mean().iloc[-1]
+        sma_200 = pd.Series(close_prices).rolling(window=200).mean().iloc[-1]
+
+        # Calculate RSI
+        delta = pd.Series(close_prices).diff()
+        gains = delta.where(delta > 0, 0).rolling(window=14).mean()
+        losses = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
+        rs = gains / losses
+        rsi = 100 - (100 / (1 + rs.iloc[-1]))
+
+        # Calculate MACD
+        exp1 = pd.Series(close_prices).ewm(span=12, adjust=False).mean()
+        exp2 = pd.Series(close_prices).ewm(span=26, adjust=False).mean()
+        macd_line = exp1 - exp2
+        signal_line = macd_line.ewm(span=9, adjust=False).mean()
+        macd_hist = macd_line - signal_line
+
+        # Calculate Bollinger Bands
+        middle_band = pd.Series(close_prices).rolling(window=20).mean()
+        std_dev = pd.Series(close_prices).rolling(window=20).std()
+        upper_band = middle_band + (std_dev * 2)
+        lower_band = middle_band - (std_dev * 2)
+
+        return TechnicalIndicators(
+            sma_50=float(sma_50),
+            sma_200=float(sma_200),
+            rsi=float(rsi),
+            macd={
+                "macd": float(macd_line.iloc[-1]),
+                "signal": float(signal_line.iloc[-1]),
+                "histogram": float(macd_hist.iloc[-1])
+            },
+            bollinger_bands={
+                "upper": [float(x) for x in upper_band.tail(20).tolist()],
+                "middle": [float(x) for x in middle_band.tail(20).tolist()],
+                "lower": [float(x) for x in lower_band.tail(20).tolist()]
+            }
+        )
     except Exception as e:
-        logger.error(f"Error fetching US stock data: {str(e)}")
-        raise ValueError(f"Failed to fetch data for US stock {ticker}")
+        logger.error(f"Error calculating technical indicators: {str(e)}")
+        raise
 
 def _get_recommendation(indicators: TechnicalIndicators) -> str:
     try:
@@ -172,50 +294,3 @@ def _generate_analysis_summary(indicators: TechnicalIndicators, change_percent: 
     except Exception as e:
         logger.error(f"Error generating analysis summary: {str(e)}")
         return "기술적 분석 요약을 생성할 수 없습니다."
-
-async def _calculate_technical_indicators(data: pd.DataFrame) -> TechnicalIndicators:
-    try:
-        close_prices = data['Close'].values if 'Close' in data.columns else data['종가'].values
-        
-        # Calculate SMA
-        sma_50 = pd.Series(close_prices).rolling(window=50).mean().iloc[-1]
-        sma_200 = pd.Series(close_prices).rolling(window=200).mean().iloc[-1]
-
-        # Calculate RSI
-        delta = pd.Series(close_prices).diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs.iloc[-1]))
-
-        # Calculate MACD
-        exp1 = pd.Series(close_prices).ewm(span=12, adjust=False).mean()
-        exp2 = pd.Series(close_prices).ewm(span=26, adjust=False).mean()
-        macd_line = exp1 - exp2
-        signal_line = macd_line.ewm(span=9, adjust=False).mean()
-        macd_hist = macd_line - signal_line
-
-        # Calculate Bollinger Bands
-        middle_band = pd.Series(close_prices).rolling(window=20).mean()
-        std_dev = pd.Series(close_prices).rolling(window=20).std()
-        upper_band = middle_band + (std_dev * 2)
-        lower_band = middle_band - (std_dev * 2)
-
-        return TechnicalIndicators(
-            sma_50=float(sma_50),
-            sma_200=float(sma_200),
-            rsi=float(rsi),
-            macd={
-                "macd": float(macd_line.iloc[-1]),
-                "signal": float(signal_line.iloc[-1]),
-                "histogram": float(macd_hist.iloc[-1])
-            },
-            bollinger_bands={
-                "upper": [float(x) for x in upper_band.tail(20).tolist()],
-                "middle": [float(x) for x in middle_band.tail(20).tolist()],
-                "lower": [float(x) for x in lower_band.tail(20).tolist()]
-            }
-        )
-    except Exception as e:
-        logger.error(f"Error calculating technical indicators: {str(e)}")
-        raise
