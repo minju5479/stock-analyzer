@@ -130,14 +130,14 @@ async def _get_us_stock_data(ticker: str, timeframe: str = 'daily') -> pd.DataFr
         # timeframe에 따라 적절한 기간과 간격 설정
         period_map = {
             '1m': ("1d", "1m"),
-            '3m': ("1d", "3m"),
+            '3m': ("1d", "2m"),
             '5m': ("1d", "5m"),
-            '10m': ("5d", "10m"),
+            '10m': ("5d", "15m"),
             '15m': ("5d", "15m"),
             '30m': ("5d", "30m"),
             '60m': ("7d", "60m"),
-            '120m': ("7d", "90m"),
-            '240m': ("7d", "90m"),
+            '120m': ("7d", "60m"),
+            '240m': ("7d", "60m"),
             'daily': ("1y", "1d"),
             'weekly': ("2y", "1wk"),
             'monthly': ("5y", "1mo"),
@@ -186,6 +186,12 @@ async def _calculate_rsi_series(data: pd.DataFrame, period: int = 14) -> List[fl
         logger.error(f"Error calculating RSI series: {str(e)}")
         raise
 
+def _clean_float_value(value):
+    """Handle NaN and Infinity values for JSON serialization"""
+    if pd.isna(value) or pd.isinf(value):
+        return None
+    return float(value)
+
 async def _calculate_technical_indicators(data: pd.DataFrame) -> TechnicalIndicators:
     try:
         close_prices = data['Close'].values if 'Close' in data.columns else data['종가'].values
@@ -215,18 +221,18 @@ async def _calculate_technical_indicators(data: pd.DataFrame) -> TechnicalIndica
         lower_band = middle_band - (std_dev * 2)
 
         return TechnicalIndicators(
-            sma_50=float(sma_50),
-            sma_200=float(sma_200),
-            rsi=float(rsi),
+            sma_50=_clean_float_value(sma_50),
+            sma_200=_clean_float_value(sma_200),
+            rsi=_clean_float_value(rsi),
             macd={
-                "macd": float(macd_line.iloc[-1]),
-                "signal": float(signal_line.iloc[-1]),
-                "histogram": float(macd_hist.iloc[-1])
+                "macd": _clean_float_value(macd_line.iloc[-1]),
+                "signal": _clean_float_value(signal_line.iloc[-1]),
+                "histogram": _clean_float_value(macd_hist.iloc[-1])
             },
             bollinger_bands={
-                "upper": [float(x) for x in upper_band.tail(20).tolist()],
-                "middle": [float(x) for x in middle_band.tail(20).tolist()],
-                "lower": [float(x) for x in lower_band.tail(20).tolist()]
+                "upper": [_clean_float_value(x) for x in upper_band.tail(20).tolist()],
+                "middle": [_clean_float_value(x) for x in middle_band.tail(20).tolist()],
+                "lower": [_clean_float_value(x) for x in lower_band.tail(20).tolist()]
             }
         )
     except Exception as e:
