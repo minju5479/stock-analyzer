@@ -89,36 +89,47 @@ async def _get_korean_stock_data(ticker: str, timeframe: str = 'daily') -> pd.Da
         if interval == 'min':
             # Note: pykrx는 분 단위 데이터를 제공하지 않으므로 다른 데이터 소스 사용 필요
             raise NotImplementedError("Korean stock minute data not yet implemented")
-        
-        for i in range(5):
-            try_date = end_date - timedelta(days=i)
+
+        # 주간/월간 데이터 처리
+        if interval == 'week':
             try:
-                if interval == 'week':
-                    df = stock.get_market_ohlcv_by_date(
-                        start_date.strftime("%Y%m%d"),
-                        try_date.strftime("%Y%m%d"),
-                        ticker,
-                        freq='w'
-                    )
-                elif interval == 'month':
-                    df = stock.get_market_ohlcv_by_date(
-                        start_date.strftime("%Y%m%d"),
-                        try_date.strftime("%Y%m%d"),
-                        ticker,
-                        freq='m'
-                    )
-                else:  # daily
+                df = stock.get_market_ohlcv(
+                    start_date.strftime("%Y%m%d"),
+                    end_date.strftime("%Y%m%d"),
+                    ticker,
+                    interval='w'
+                )
+                if not df.empty:
+                    return df
+            except Exception as e:
+                logger.warning(f"Failed to fetch weekly data: {str(e)}")
+        elif interval == 'month':
+            try:
+                df = stock.get_market_ohlcv(
+                    start_date.strftime("%Y%m%d"),
+                    end_date.strftime("%Y%m%d"),
+                    ticker,
+                    interval='m'
+                )
+                if not df.empty:
+                    return df
+            except Exception as e:
+                logger.warning(f"Failed to fetch monthly data: {str(e)}")
+        else:  # 일간 데이터 처리
+            for i in range(5):
+                try_date = end_date - timedelta(days=i)
+                try:
                     df = stock.get_market_ohlcv_by_date(
                         start_date.strftime("%Y%m%d"),
                         try_date.strftime("%Y%m%d"),
                         ticker
                     )
-                if not df.empty:
-                    return df
-            except Exception as e:
-                logger.warning(f"Failed to fetch data for date {try_date.strftime('%Y%m%d')}: {str(e)}")
+                    if not df.empty:
+                        return df
+                except Exception as e:
+                    logger.warning(f"Failed to fetch data for date {try_date.strftime('%Y%m%d')}: {str(e)}")
         
-        raise ValueError(f"No data found for Korean stock {ticker} in the last 5 days")
+        raise ValueError(f"No data found for Korean stock {ticker}")
     except Exception as e:
         logger.error(f"Error fetching Korean stock data: {str(e)}")
         raise ValueError(f"Failed to fetch data for Korean stock {ticker}")
@@ -188,7 +199,7 @@ async def _calculate_rsi_series(data: pd.DataFrame, period: int = 14) -> List[fl
 
 def _clean_float_value(value):
     """Handle NaN and Infinity values for JSON serialization"""
-    if pd.isna(value) or pd.isinf(value):
+    if pd.isna(value) or np.isinf(value):
         return None
     return float(value)
 
@@ -245,22 +256,25 @@ def _get_recommendation(indicators: TechnicalIndicators) -> str:
         sell_signals = 0
 
         # RSI 기반 신호
-        if indicators.rsi < 30:
-            buy_signals += 1
-        elif indicators.rsi > 70:
-            sell_signals += 1
+        if indicators.rsi is not None:
+            if indicators.rsi < 30:
+                buy_signals += 1
+            elif indicators.rsi > 70:
+                sell_signals += 1
 
         # MACD 기반 신호
-        if indicators.macd['macd'] > 0 and indicators.macd['histogram'] > 0:
-            buy_signals += 1
-        elif indicators.macd['macd'] < 0 and indicators.macd['histogram'] < 0:
-            sell_signals += 1
+        if indicators.macd.get('macd') is not None and indicators.macd.get('histogram') is not None:
+            if indicators.macd['macd'] > 0 and indicators.macd['histogram'] > 0:
+                buy_signals += 1
+            elif indicators.macd['macd'] < 0 and indicators.macd['histogram'] < 0:
+                sell_signals += 1
 
         # SMA 기반 신호
-        if indicators.sma_50 > indicators.sma_200:
-            buy_signals += 1
-        else:
-            sell_signals += 1
+        if indicators.sma_50 is not None and indicators.sma_200 is not None:
+            if indicators.sma_50 > indicators.sma_200:
+                buy_signals += 1
+            else:
+                sell_signals += 1
 
         if buy_signals > sell_signals:
             return "매수"
@@ -283,18 +297,20 @@ def _generate_analysis_summary(indicators: TechnicalIndicators, change_percent: 
             summary_parts.append(f"최근 하락세를 보이고 있으며, 전일 대비 {abs(change_percent):.2f}% 하락했습니다.")
 
         # RSI 분석
-        if indicators.rsi < 30:
-            summary_parts.append("RSI 지표상 과매도 구간에 있어 반등 가능성이 있습니다.")
-        elif indicators.rsi > 70:
-            summary_parts.append("RSI 지표상 과매수 구간에 있어 조정 가능성이 있습니다.")
-        else:
-            summary_parts.append("RSI 지표는 중립적인 범위에 있습니다.")
+        if indicators.rsi is not None:
+            if indicators.rsi < 30:
+                summary_parts.append("RSI 지표상 과매도 구간에 있어 반등 가능성이 있습니다.")
+            elif indicators.rsi > 70:
+                summary_parts.append("RSI 지표상 과매수 구간에 있어 조정 가능성이 있습니다.")
+            else:
+                summary_parts.append("RSI 지표는 중립적인 범위에 있습니다.")
 
         # 이동평균선 분석
-        if indicators.sma_50 > indicators.sma_200:
-            summary_parts.append("50일 이동평균선이 200일 이동평균선 위에 위치하여 장기적인 상승 추세를 보이고 있습니다.")
-        else:
-            summary_parts.append("50일 이동평균선이 200일 이동평균선 아래에 위치하여 장기적인 하락 추세를 보이고 있습니다.")
+        if indicators.sma_50 is not None and indicators.sma_200 is not None:
+            if indicators.sma_50 > indicators.sma_200:
+                summary_parts.append("50일 이동평균선이 200일 이동평균선 위에 위치하여 장기적인 상승 추세를 보이고 있습니다.")
+            else:
+                summary_parts.append("50일 이동평균선이 200일 이동평균선 아래에 위치하여 장기적인 하락 추세를 보이고 있습니다.")
 
         return " ".join(summary_parts)
     except Exception as e:

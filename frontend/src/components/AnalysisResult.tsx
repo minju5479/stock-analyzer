@@ -1,11 +1,11 @@
 import React from 'react';
 import { Paper, Typography, Grid, Box } from '@mui/material';
-import { StockAnalysis } from '../types';
+import { StockAnalysis, TimeFrame } from '../types';
 import { StockChart } from './StockChart';
 
 interface AnalysisResultProps {
   analysis: StockAnalysis | null;
-  onTimeframeChange?: (timeframe: 'daily' | 'weekly' | 'hourly') => void;
+  onTimeframeChange?: (timeframe: TimeFrame) => void;
 }
 
 export const AnalysisResult: React.FC<AnalysisResultProps> = ({ analysis, onTimeframeChange }) => {
@@ -48,11 +48,11 @@ export const AnalysisResult: React.FC<AnalysisResultProps> = ({ analysis, onTime
           <Grid item xs={12} md={4}>
             <Typography variant="subtitle1">기술적 지표</Typography>
             <Box sx={{ mt: 1 }}>
-              <Typography>SMA 50: {analysis.indicators.sma_50.toFixed(2)}</Typography>
-              <Typography>SMA 200: {analysis.indicators.sma_200.toFixed(2)}</Typography>
-              <Typography>RSI: {analysis.indicators.rsi.toFixed(2)}</Typography>
+              <Typography>SMA 50: {analysis.indicators.sma_50?.toFixed(2) ?? 'N/A'}</Typography>
+              <Typography>SMA 200: {analysis.indicators.sma_200?.toFixed(2) ?? 'N/A'}</Typography>
+              <Typography>RSI: {analysis.indicators.rsi?.toFixed(2) ?? 'N/A'}</Typography>
               <Typography>
-                MACD: {analysis.indicators.macd.macd.toFixed(2)}
+                MACD: {analysis.indicators.macd.macd?.toFixed(2) ?? 'N/A'}
               </Typography>
             </Box>
           </Grid>

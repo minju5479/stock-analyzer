@@ -1,7 +1,16 @@
+export type TimeFrame = 
+  | '1m' | '3m' | '5m' | '10m' | '15m' | '30m'
+  | '60m' | '120m' | '240m'
+  | 'daily'
+  | 'weekly'
+  | 'monthly';
+
 export interface ChartData {
   dates: string[];
   prices: number[];
   volumes: number[];
+  rsi: number[];
+  timeframe: TimeFrame;
 }
 
 export interface StockAnalysis {

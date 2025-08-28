@@ -6,11 +6,11 @@ class AnalysisRequest(BaseModel):
     market: str
 
 class TechnicalIndicators(BaseModel):
-    sma_50: float
-    sma_200: float
-    rsi: float
-    macd: Dict[str, float]
-    bollinger_bands: Dict[str, List[float]]
+    sma_50: Optional[float]
+    sma_200: Optional[float]
+    rsi: Optional[float]
+    macd: Dict[str, Optional[float]]
+    bollinger_bands: Dict[str, List[Optional[float]]]
 
 class ChartData(BaseModel):
     dates: List[str]

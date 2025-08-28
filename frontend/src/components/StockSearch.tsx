@@ -6,7 +6,7 @@ import {
   Alert,
   CircularProgress,
 } from '@mui/material'
-import { StockAnalysis } from '../types'
+import { StockAnalysis, TimeFrame } from '../types'
 import { AnalysisResult } from './AnalysisResult'
 
 export const StockSearch: React.FC = () => {
@@ -14,6 +14,7 @@ export const StockSearch: React.FC = () => {
   const [analysis, setAnalysis] = useState<StockAnalysis | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [timeframe, setTimeframe] = useState<TimeFrame>('daily')
 
   const detectMarket = (code: string): string => {
     // 숫자만 포함된 6자리면 한국 주식
@@ -28,7 +29,38 @@ export const StockSearch: React.FC = () => {
     return /\d/.test(code) ? 'KR' : 'US'
   }
 
-  const handleSearch = async () => {
+  const fetchStockData = async (stockTicker: string, selectedTimeframe: string) => {
+    if (!stockTicker) {
+      throw new Error('종목 코드를 입력해주세요.')
+    }
+
+    const market = detectMarket(stockTicker)
+    
+    // Korean stocks don't support minute-level data
+    if (market === 'KR' && selectedTimeframe.endsWith('m')) {
+      throw new Error('한국 주식은 분 단위 데이터를 지원하지 않습니다. 일/주/월 단위를 선택해주세요.')
+    }
+
+    const response = await fetch(`http://localhost:8000/api/analysis/analyze?timeframe=${selectedTimeframe}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        ticker: stockTicker,
+        market,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      throw new Error(errorData.detail || '분석 중 오류가 발생했습니다.')
+    }
+
+    return response.json()
+  }
+
+  const handleSearch = async (newTimeframe?: TimeFrame) => {
     if (!ticker) {
       setError('종목 코드를 입력해주세요.')
       return
@@ -38,23 +70,12 @@ export const StockSearch: React.FC = () => {
     setError(null)
 
     try {
-      const market = detectMarket(ticker)
-      const response = await fetch('http://localhost:8000/api/analysis/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ticker,
-          market,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error('분석 중 오류가 발생했습니다.')
+      const selectedTimeframe = newTimeframe || timeframe
+      if (newTimeframe) {
+        setTimeframe(newTimeframe)
       }
-
-      const data = await response.json()
+      
+      const data = await fetchStockData(ticker, selectedTimeframe)
       setAnalysis(data)
     } catch (error) {
       setError(error instanceof Error ? error.message : '알 수 없는 오류가 발생했습니다.')
@@ -80,7 +101,7 @@ export const StockSearch: React.FC = () => {
           />
           <Button
             variant="contained"
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             disabled={loading}
             sx={{ height: 56 }}
           >
@@ -95,7 +116,10 @@ export const StockSearch: React.FC = () => {
         </Alert>
       )}
 
-      {analysis && <AnalysisResult analysis={analysis} />}
+      {analysis && <AnalysisResult analysis={analysis} onTimeframeChange={(newTimeframe: TimeFrame) => {
+        setTimeframe(newTimeframe);
+        handleSearch(newTimeframe);
+      }} />}
     </Box>
   )
 }

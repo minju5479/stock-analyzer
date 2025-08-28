@@ -31,10 +31,24 @@ async def analyze_stock(request: AnalysisRequest, timeframe: str = "daily"):
             )
             
         market = detect_market(request.ticker)
+        
+        # Korean stocks don't support minute-level data
+        if market == 'KR' and any(timeframe.endswith('m') for timeframe in [timeframe]):
+            raise HTTPException(
+                status_code=400,
+                detail="Minute-level data is not available for Korean stocks. Please use daily, weekly, or monthly."
+            )
+            
         result = await stock_service.analyze_stock(request.ticker, market, timeframe)
         return result
+    except HTTPException:
+        raise
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except NotImplementedError as e:
+        raise HTTPException(status_code=501, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 @router.get("/indicators/{ticker}")
 async def get_technical_indicators(ticker: str, timeframe: str = "daily"):

@@ -62,7 +62,7 @@ export const StockChart: React.FC<StockChartProps> = ({ chartData, onTimeframeCh
   ];
 
   const handleTimeframeChange = (
-    event: React.MouseEvent<HTMLElement>,
+    _event: React.MouseEvent<HTMLElement>,
     newTimeframe: TimeFrame,
   ) => {
     if (newTimeframe !== null) {
@@ -80,14 +80,6 @@ export const StockChart: React.FC<StockChartProps> = ({ chartData, onTimeframeCh
         borderColor: 'rgb(75, 192, 192)',
         backgroundColor: 'rgba(75, 192, 192, 0.5)',
         yAxisID: 'y',
-      },
-      {
-        label: '거래량',
-        data: chartData.volumes,
-        borderColor: 'rgb(53, 162, 235)',
-        backgroundColor: 'rgba(53, 162, 235, 0.5)',
-        type: 'bar',
-        yAxisID: 'y1',
       },
     ],
   };
@@ -170,7 +162,7 @@ export const StockChart: React.FC<StockChartProps> = ({ chartData, onTimeframeCh
     },
   };
 
-  const volumeData = {
+  const volumeChartData = {
     labels: chartData.dates,
     datasets: [
       {
@@ -178,7 +170,6 @@ export const StockChart: React.FC<StockChartProps> = ({ chartData, onTimeframeCh
         data: chartData.volumes,
         backgroundColor: 'rgba(53, 162, 235, 0.5)',
         borderColor: 'rgb(53, 162, 235)',
-        type: 'bar',
       },
     ],
   };
@@ -227,7 +218,7 @@ export const StockChart: React.FC<StockChartProps> = ({ chartData, onTimeframeCh
           <Line options={options} data={data} />
         </Box>
         <Box sx={{ height: '200px', width: '100%' }}>
-          <Line options={volumeChartOptions} data={volumeData} />
+          <Line options={volumeChartOptions} data={volumeChartData} />
         </Box>
         <Box sx={{ height: '200px', width: '100%' }}>
           <Line options={rsiChartOptions} data={rsiData} />
