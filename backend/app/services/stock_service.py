@@ -158,26 +158,32 @@ async def _get_us_stock_data(ticker: str, timeframe: str = 'daily') -> pd.DataFr
         stock_data = yf.Ticker(ticker)
         
         # timeframe에 따라 적절한 기간과 간격 설정
+        # yfinance 지원 간격만 사용: 1m, 5m, 15m, 30m, 60m, 1d, 1wk, 1mo
         period_map = {
-            '1m': ("1d", "1m"),
-            '3m': ("1d", "2m"),
-            '5m': ("1d", "5m"),
-            '10m': ("5d", "15m"),
-            '15m': ("5d", "15m"),
-            '30m': ("5d", "30m"),
-            '60m': ("7d", "60m"),
-            '120m': ("7d", "60m"),
-            '240m': ("7d", "60m"),
-            'daily': ("1y", "1d"),
-            'weekly': ("2y", "1wk"),
-            'monthly': ("5y", "1mo"),
+            '1m': ("1d", "1m"),      # 1분봉: 최대 1일
+            '5m': ("5d", "5m"),      # 5분봉: 최대 5일
+            '15m': ("5d", "15m"),    # 15분봉: 최대 5일
+            '30m': ("5d", "30m"),    # 30분봉: 최대 5일
+            '60m': ("7d", "60m"),    # 60분봉: 최대 7일
+            'daily': ("1y", "1d"),   # 일봉
+            'weekly': ("2y", "1wk"), # 주봉
+            'monthly': ("5y", "1mo"), # 월봉
         }
         
         period, interval = period_map.get(timeframe, ("1y", "1d"))
-        df = stock_data.history(period=period, interval=interval)
+        
+        try:
+            logger.info(f"Fetching US stock {ticker} data with period={period}, interval={interval} for timeframe={timeframe}")
+            df = stock_data.history(period=period, interval=interval)
             
-        if df.empty:
-            raise ValueError(f"No data found for US stock {ticker}")
+            if df.empty:
+                raise ValueError(f"No data found for US stock {ticker} with timeframe {timeframe}")
+                    
+        except Exception as e:
+            logger.error(f"Error fetching US stock data for {ticker} with timeframe {timeframe}: {str(e)}")
+            raise ValueError(f"Failed to fetch data for US stock {ticker}: {str(e)}")
+            
+        logger.info(f"Successfully fetched {len(df)} records for US stock {ticker}")
         return df
     except Exception as e:
         logger.error(f"Error fetching US stock data: {str(e)}")

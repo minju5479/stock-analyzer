@@ -11,7 +11,7 @@ import {
   BarElement,
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
-import { Paper, Box, ToggleButton, ToggleButtonGroup } from '@mui/material';
+import { Paper, Box, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { ChartData } from '../types';
 
 ChartJS.register(
@@ -41,14 +41,10 @@ export const StockChart: React.FC<StockChartProps> = ({ chartData, onTimeframeCh
       label: '분',
       options: [
         { value: '1m', label: '1분' },
-        { value: '3m', label: '3분' },
         { value: '5m', label: '5분' },
-        { value: '10m', label: '10분' },
         { value: '15m', label: '15분' },
         { value: '30m', label: '30분' },
         { value: '60m', label: '60분' },
-        { value: '120m', label: '120분' },
-        { value: '240m', label: '240분' },
       ]
     }] : []),
     {
