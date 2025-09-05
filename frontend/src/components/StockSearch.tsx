@@ -41,7 +41,7 @@ export const StockSearch: React.FC = () => {
       throw new Error('한국 주식은 분 단위 데이터를 지원하지 않습니다. 일/주/월 단위를 선택해주세요.')
     }
 
-    const response = await fetch(`http://localhost:8000/api/analysis/analyze?timeframe=${selectedTimeframe}`, {
+    const response = await fetch(`http://127.0.0.1:8000/api/analysis/analyze?timeframe=${selectedTimeframe}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

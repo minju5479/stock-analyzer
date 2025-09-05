@@ -69,7 +69,7 @@ async def _get_korean_stock_data(ticker: str, timeframe: str = 'daily') -> pd.Da
         # timeframe에 따라 시작 날짜와 간격 조정
         timeframe_settings = {
             '1m': (1, 'min'),
-            '3m': (1, 'min'),
+            '3m': (1, 'min'), 
             '5m': (1, 'min'),
             '10m': (1, 'min'),
             '15m': (1, 'min'),
@@ -78,8 +78,8 @@ async def _get_korean_stock_data(ticker: str, timeframe: str = 'daily') -> pd.Da
             '120m': (1, 'min'),
             '240m': (1, 'min'),
             'daily': (365, 'day'),
-            'weekly': (365 * 2, 'week'),
-            'monthly': (365 * 5, 'month')
+            'weekly': (365 * 3, 'week'),  # 더 많은 데이터를 가져와서 주봉 생성
+            'monthly': (365 * 5, 'month')  # 더 많은 데이터를 가져와서 월봉 생성
         }
         
         days, interval = timeframe_settings.get(timeframe, (365, 'day'))
@@ -90,31 +90,50 @@ async def _get_korean_stock_data(ticker: str, timeframe: str = 'daily') -> pd.Da
             # Note: pykrx는 분 단위 데이터를 제공하지 않으므로 다른 데이터 소스 사용 필요
             raise NotImplementedError("Korean stock minute data not yet implemented")
 
-        # 주간/월간 데이터 처리
-        if interval == 'week':
+        # 주간/월간 데이터 처리 - pykrx는 간격 파라미터를 지원하지 않으므로 일간 데이터를 가져와서 리샘플링
+        if interval in ['week', 'month']:
+            # 일간 데이터를 먼저 가져옴
             try:
-                df = stock.get_market_ohlcv(
+                logger.info(f"Fetching daily data for resampling to {interval} for ticker {ticker}")
+                df = stock.get_market_ohlcv_by_date(
                     start_date.strftime("%Y%m%d"),
                     end_date.strftime("%Y%m%d"),
-                    ticker,
-                    interval='w'
+                    ticker
                 )
+                
+                if df.empty:
+                    logger.warning(f"No daily data available for ticker {ticker}")
+                    raise ValueError("No daily data available for resampling")
+                
+                logger.info(f"Successfully fetched {len(df)} daily records, resampling to {interval}")
+                
+                # 주간/월간으로 리샘플링
+                if interval == 'week':
+                    df = df.resample('W').agg({
+                        '시가': 'first',
+                        '고가': 'max', 
+                        '저가': 'min',
+                        '종가': 'last',
+                        '거래량': 'sum'
+                    }).dropna()
+                elif interval == 'month':
+                    df = df.resample('M').agg({
+                        '시가': 'first',
+                        '고가': 'max',
+                        '저가': 'min', 
+                        '종가': 'last',
+                        '거래량': 'sum'
+                    }).dropna()
+                
+                logger.info(f"Resampled to {len(df)} {interval} records")
+                
                 if not df.empty:
                     return df
+                else:
+                    logger.warning(f"Resampled data is empty for {interval}")
+                    
             except Exception as e:
-                logger.warning(f"Failed to fetch weekly data: {str(e)}")
-        elif interval == 'month':
-            try:
-                df = stock.get_market_ohlcv(
-                    start_date.strftime("%Y%m%d"),
-                    end_date.strftime("%Y%m%d"),
-                    ticker,
-                    interval='m'
-                )
-                if not df.empty:
-                    return df
-            except Exception as e:
-                logger.warning(f"Failed to fetch monthly data: {str(e)}")
+                logger.error(f"Failed to fetch and resample {interval} data: {str(e)}", exc_info=True)
         else:  # 일간 데이터 처리
             for i in range(5):
                 try_date = end_date - timedelta(days=i)
